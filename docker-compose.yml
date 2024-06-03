@@ -1,1 +1,5 @@
-#this is a test test. Wee
+# This is Ians' docker compose file. Please use your own. Dis mine. Fuck off.
+
+services:
+  image: mongo
+  ports: 27017:27017
