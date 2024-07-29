@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,25 +13,29 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// HOW TO STORE THE DATA?
-// album represents data about a record album.
-type album struct {
-	ID     string  `json:"id"`
-	Title  string  `json:"title"`
-	Artist string  `json:"artist"`
-	Price  float64 `json:"price"`
+// profile represents data about a user's profile.
+type profile struct {
+	User                  string `json:"user"`
+	Address               string `json:"address"`
+	ResponsibleIndividual string `json:"responsible_individual"`
+	ContactNumber         string `json:"contact_number"`
 }
 
-// STORE WHAT DATA?
-// albums slice to seed record album data.
+// profileCollection to handle profile data.
 var client *mongo.Client
-var albumCollection *mongo.Collection
+var profileCollection *mongo.Collection
 
 func main() {
 	var err error
 
+	// Use the MONGO_URI environment variable
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
 	// Set client options
-	clientOptions := options.Client().ApplyURI("mongodb://127.0.0.1:27017")
+	clientOptions := options.Client().ApplyURI(mongoURI)
 
 	// Connect to MongoDB
 	client, err = mongo.Connect(context.TODO(), clientOptions)
@@ -47,68 +52,67 @@ func main() {
 	fmt.Println("Connected to MongoDB!")
 
 	// Get a handle for your collection
-	albumCollection = client.Database("recordstore").Collection("albums")
+	profileCollection = client.Database("marketplace").Collection("profiles")
 
 	router := gin.Default()
-	router.GET("/albums", getAlbums)
-	router.GET("/albums/:id", getAlbumByID)
-	router.POST("/albums", postAlbums)
+	router.GET("/profiles", getProfiles)
+	router.GET("/profiles/:user", getProfileByUser)
+	router.POST("/profiles", postProfiles)
 
-	router.Run("localhost:8080")
+	router.Run(":8080")
 }
 
-// getAlbums responds with the list of all albums as JSON.
-func getAlbums(c *gin.Context) {
-	var albums []album
+// getProfiles responds with the list of all profiles as JSON.
+func getProfiles(c *gin.Context) {
+	var profiles []profile
 
-	cursor, err := albumCollection.Find(context.TODO(), bson.D{})
+	cursor, err := profileCollection.Find(context.TODO(), bson.D{})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error getting albums"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error getting profiles"})
 		return
 	}
 	defer cursor.Close(context.TODO())
 
 	for cursor.Next(context.TODO()) {
-		var album album
-		if err := cursor.Decode(&album); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decoding album"})
+		var profile profile
+		if err := cursor.Decode(&profile); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decoding profile"})
 			return
 		}
-		albums = append(albums, album)
+		profiles = append(profiles, profile)
 	}
-	c.IndentedJSON(http.StatusOK, albums)
+	c.IndentedJSON(http.StatusOK, profiles)
 }
 
-// postAlbums adds an album from JSON received in the request body.
-func postAlbums(c *gin.Context) {
-	var newAlbum album
+// postProfiles adds a profile from JSON received in the request body.
+func postProfiles(c *gin.Context) {
+	var newProfile profile
 
 	// Call BindJSON to bind the received JSON to
-	// newAlbum.
-	if err := c.BindJSON(&newAlbum); err != nil {
+	// newProfile.
+	if err := c.BindJSON(&newProfile); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid input"})
 		return
 	}
 
-	_, err := albumCollection.InsertOne(context.TODO(), newAlbum)
+	_, err := profileCollection.InsertOne(context.TODO(), newProfile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error inserting album"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error inserting profile"})
 		return
 	}
-	c.IndentedJSON(http.StatusCreated, newAlbum)
+	c.IndentedJSON(http.StatusCreated, newProfile)
 }
 
-// getAlbumByID locates the album whose ID value matches the id
-// parameter sent by the client, then returns that album as a response.
-func getAlbumByID(c *gin.Context) {
-	id := c.Param("id")
+// getProfileByUser locates the profile whose User value matches the user
+// parameter sent by the client, then returns that profile as a response.
+func getProfileByUser(c *gin.Context) {
+	user := c.Param("user")
 
-	var album album
-	err := albumCollection.FindOne(context.TODO(), bson.D{{Key: "id", Value: id}}).Decode(&album)
+	var profile profile
+	err := profileCollection.FindOne(context.TODO(), bson.D{{Key: "user", Value: user}}).Decode(&profile)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "album not found"})
+		c.JSON(http.StatusNotFound, gin.H{"message": "profile not found"})
 		return
-
 	}
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "album not found"})
+	c.IndentedJSON(http.StatusOK, profile)
 }
